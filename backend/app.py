@@ -1,9 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from ingest import extract_article_from_url
+from claims import extract_claims
 
 app = FastAPI(title="VeriNews API", version="0.1")
 
+
+# ---------- MODELS ----------
 
 class HealthResponse(BaseModel):
     status: str
@@ -18,6 +21,16 @@ class IngestResponse(BaseModel):
     title: str
     content: str
 
+
+class ClaimsRequest(BaseModel):
+    content: str
+
+
+class ClaimsResponse(BaseModel):
+    claims: list[str]
+
+
+# ---------- ROUTES ----------
 
 @app.get("/health", response_model=HealthResponse)
 def health_check():
@@ -46,7 +59,16 @@ def ingest_article(request: IngestRequest):
 
     except Exception as e:
         raise HTTPException(
-    status_code=400,
-    detail=f"{type(e).__name__}: {str(e)}"
-)
+            status_code=400,
+            detail=f"{type(e).__name__}: {str(e)}"
+        )
 
+
+@app.post("/claims", response_model=ClaimsResponse)
+def get_claims(request: ClaimsRequest):
+    claims = extract_claims(request.content)
+
+    if not claims:
+        raise HTTPException(status_code=400, detail="No claims found")
+
+    return {"claims": claims}
