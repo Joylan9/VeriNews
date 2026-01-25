@@ -4,9 +4,20 @@ from pydantic import BaseModel
 from ingest import extract_article_from_url
 from claims import extract_claims
 from evidence import search_wikipedia
+from verify import verify_claim
 
 
 app = FastAPI(title="VeriNews API", version="0.1")
+
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # =====================
 # MODELS
@@ -47,6 +58,16 @@ class EvidenceItem(BaseModel):
 
 class EvidenceResponse(BaseModel):
     evidence: list[EvidenceItem]
+
+
+class VerifyRequest(BaseModel):
+    claim: str
+    evidence: list[dict]
+
+
+class VerifyResponse(BaseModel):
+    verdict: str
+    reason: str
 
 
 # =====================
@@ -109,3 +130,8 @@ def get_evidence(request: EvidenceRequest):
         )
 
     return {"evidence": evidence}
+
+
+@app.post("/verify", response_model=VerifyResponse)
+def verify(request: VerifyRequest):
+    return verify_claim(request.claim, request.evidence)
