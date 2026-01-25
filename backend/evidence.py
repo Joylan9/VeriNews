@@ -1,5 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
+import spacy
+
+nlp = spacy.load("en_core_web_sm")
 
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 
@@ -8,22 +11,73 @@ HEADERS = {
 }
 
 
+def extract_core_entities(claim: str) -> dict:
+    """
+    Extract core entities needed for constrained search.
+    """
+    doc = nlp(claim)
+
+    entities = {
+        "countries": [],
+        "dates": [],
+        "numbers": [],
+        "keywords": []
+    }
+
+    for ent in doc.ents:
+        if ent.label_ in ["GPE", "LOC"]:
+            entities["countries"].append(ent.text)
+        elif ent.label_ == "DATE":
+            entities["dates"].append(ent.text)
+        elif ent.label_ in ["CARDINAL", "QUANTITY"]:
+            entities["numbers"].append(ent.text)
+
+    # fallback keywords (nouns)
+    entities["keywords"] = [
+        token.text
+        for token in doc
+        if token.pos_ == "NOUN" and not token.is_stop
+    ]
+
+    return entities
+
+
 def search_wikipedia(claim: str, limit: int = 3) -> list[dict]:
+    """
+    Enterprise-safe evidence retrieval:
+    - Entity-aware search
+    - Relevance filtering
+    - No crashes on upstream failure
+    """
+
+    entities = extract_core_entities(claim)
+    countries = entities["countries"]
+
+    # Build constrained query
+    query_parts = []
+    if countries:
+        query_parts.append(countries[0])
+    query_parts.extend(entities["keywords"][:3])
+
+    search_query = " ".join(query_parts)
+
     params = {
         "action": "query",
         "list": "search",
-        "srsearch": claim,
+        "srsearch": search_query,
         "format": "json",
     }
 
-    res = requests.get(
-        WIKI_API,
-        params=params,
-        headers=HEADERS,
-        timeout=10,
-    )
+    try:
+        res = requests.get(
+            WIKI_API,
+            params=params,
+            headers=HEADERS,
+            timeout=10,
+        )
+    except requests.RequestException:
+        return []
 
-    # DO NOT crash on external failure
     if res.status_code != 200:
         return []
 
@@ -36,25 +90,32 @@ def search_wikipedia(claim: str, limit: int = 3) -> list[dict]:
         title = item["title"]
         url = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
 
-        page_res = requests.get(url, headers=HEADERS, timeout=10)
+        try:
+            page_res = requests.get(url, headers=HEADERS, timeout=10)
+        except requests.RequestException:
+            continue
+
         if page_res.status_code != 200:
             continue
 
         soup = BeautifulSoup(page_res.text, "html.parser")
 
-        snippet = ""
         for p in soup.find_all("p"):
             text = p.get_text(" ", strip=True)
-            if len(text) > 60:
-                snippet = text
-                break
 
-        if snippet:
+            # HARD relevance filter
+            if countries and countries[0].lower() not in text.lower():
+                continue
+
+            if len(text) < 80:
+                continue
+
             evidence.append({
                 "source": "Wikipedia",
                 "title": title,
                 "url": url,
-                "snippet": snippet
+                "snippet": text
             })
+            break
 
     return evidence
