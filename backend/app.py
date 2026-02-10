@@ -96,15 +96,15 @@ def health_check():
 
 @app.post("/ingest", response_model=IngestResponse)
 @limiter.limit("5/minute")
-def ingest_article(request: IngestRequest, request_raw: Request):
+def ingest_article(request: Request, body: IngestRequest):
     try:
-        if request.url:
-            article = extract_article_from_url(str(request.url))
+        if body.url:
+            article = extract_article_from_url(str(body.url))
 
-        elif request.text:
+        elif body.text:
             article = {
                 "title": "User Provided Text",
-                "content": request.text
+                "content": body.text
             }
 
         else:
@@ -124,8 +124,8 @@ def ingest_article(request: IngestRequest, request_raw: Request):
 
 @app.post("/claims", response_model=ClaimsResponse)
 @limiter.limit("10/minute")
-def get_claims(request: ClaimsRequest, request_raw: Request):
-    claims = extract_claims(request.content)
+def get_claims(request: Request, body: ClaimsRequest):
+    claims = extract_claims(body.content)
 
     if not claims:
         raise HTTPException(
@@ -138,8 +138,8 @@ def get_claims(request: ClaimsRequest, request_raw: Request):
 
 @app.post("/evidence", response_model=EvidenceResponse)
 @limiter.limit("10/minute")
-def get_evidence(request: EvidenceRequest, request_raw: Request):
-    evidence = search_wikipedia(request.claim)
+def get_evidence(request: Request, body: EvidenceRequest):
+    evidence = search_wikipedia(body.claim)
 
     if not evidence:
         raise HTTPException(
@@ -152,5 +152,5 @@ def get_evidence(request: EvidenceRequest, request_raw: Request):
 
 @app.post("/verify", response_model=VerifyResponse)
 @limiter.limit("10/minute")
-def verify(request: VerifyRequest, request_raw: Request):
-    return verify_claim(request.claim, request.evidence)
+def verify(request: Request, body: VerifyRequest):
+    return verify_claim(body.claim, body.evidence)
