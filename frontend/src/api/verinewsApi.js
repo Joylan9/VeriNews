@@ -1,4 +1,15 @@
-const BASE_URL = "http://127.0.0.1:8000";
+const BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
+async function handleResponse(res) {
+    if (res.status === 429) {
+        throw new Error("Too many requests. Please wait a moment.");
+    }
+    if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || `API Error: ${res.status}`);
+    }
+    return res.json();
+}
 
 export async function ingestText(text) {
     const res = await fetch(`${BASE_URL}/ingest`, {
@@ -6,7 +17,7 @@ export async function ingestText(text) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text })
     });
-    return res.json();
+    return handleResponse(res);
 }
 
 export async function extractClaims(content) {
@@ -15,7 +26,7 @@ export async function extractClaims(content) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content })
     });
-    return res.json();
+    return handleResponse(res);
 }
 
 export async function getEvidence(claim) {
@@ -24,7 +35,7 @@ export async function getEvidence(claim) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ claim })
     });
-    return res.json();
+    return handleResponse(res);
 }
 
 export async function verifyClaim(claim, evidence) {
@@ -33,5 +44,5 @@ export async function verifyClaim(claim, evidence) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ claim, evidence })
     });
-    return res.json();
+    return handleResponse(res);
 }

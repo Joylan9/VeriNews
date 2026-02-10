@@ -30,6 +30,8 @@ import {
     verifyClaim
 } from "../api/verinewsApi";
 
+const MAX_CHARS = 10000;
+
 // ============================================
 // MOTION VARIANTS
 // ============================================
@@ -236,6 +238,11 @@ export default function Home() {
             return;
         }
 
+        if (text.length > MAX_CHARS) {
+            showToast(`Text exceeds limit of ${MAX_CHARS} characters`, "warning");
+            return;
+        }
+
         setIsAnalyzing(true);
         setClaims([]);
         setSelectedClaimId(null);
@@ -415,19 +422,25 @@ export default function Home() {
                                         )}
                                     </div>
 
-                                    <textarea
-                                        value={text}
-                                        onChange={(e) => setText(e.target.value)}
-                                        placeholder="Paste news article text here..."
-                                        className="w-full h-40 p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none transition"
-                                    />
+                                    <div className="relative">
+                                        <textarea
+                                            value={text}
+                                            onChange={(e) => setText(e.target.value)}
+                                            placeholder="Paste news article text here..."
+                                            maxLength={MAX_CHARS}
+                                            className="w-full h-40 p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none transition"
+                                        />
+                                        <div className="absolute bottom-2 right-2 text-xs text-gray-400 bg-white/50 dark:bg-black/50 px-2 py-0.5 rounded-md backdrop-blur-sm pointer-events-none">
+                                            {text.length}/{MAX_CHARS}
+                                        </div>
+                                    </div>
 
                                     <button
                                         onClick={handleAnalyze}
                                         disabled={isAnalyzing || !text.trim()}
                                         className={`w-full mt-4 py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all ${isAnalyzing || !text.trim()
-                                                ? 'bg-gray-200 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                                : 'bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02]'
+                                            ? 'bg-gray-200 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                            : 'bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02]'
                                             }`}
                                     >
                                         {isAnalyzing ? <><Loader2 size={18} className="animate-spin" /> Analyzing...</> : <><Search size={18} /> Analyze Content</>}
@@ -461,8 +474,8 @@ export default function Home() {
                                                         key={claim.id}
                                                         onClick={() => handleSelectClaim(claim)}
                                                         className={`w-full text-left p-4 rounded-xl border transition-all ${selectedClaimId === claim.id
-                                                                ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-300 dark:border-purple-600 shadow-lg'
-                                                                : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:border-purple-300 dark:hover:border-purple-600 hover:shadow'
+                                                            ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-300 dark:border-purple-600 shadow-lg'
+                                                            : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:border-purple-300 dark:hover:border-purple-600 hover:shadow'
                                                             }`}
                                                         initial={{ opacity: 0, x: -20 }}
                                                         animate={{ opacity: 1, x: 0 }}

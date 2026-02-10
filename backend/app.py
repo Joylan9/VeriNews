@@ -1,5 +1,17 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, HttpUrl, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Rate limiting
+limiter = Limiter(key_func=get_remote_address)
+
 
 from ingest import extract_article_from_url
 from claims import extract_claims
@@ -8,12 +20,15 @@ from verify import verify_claim
 
 
 app = FastAPI(title="VeriNews API", version="0.1")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-from fastapi.middleware.cors import CORSMiddleware
+
+origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,8 +43,8 @@ class HealthResponse(BaseModel):
 
 
 class IngestRequest(BaseModel):
-    url: str | None = None
-    text: str | None = None
+    url: HttpUrl | None = None
+    text: str | None = Field(None, max_length=10000, description="Raw text input, max 10k chars")
 
 
 class IngestResponse(BaseModel):
@@ -38,7 +53,7 @@ class IngestResponse(BaseModel):
 
 
 class ClaimsRequest(BaseModel):
-    content: str
+    content: str = Field(..., min_length=10, max_length=10000)
 
 
 class ClaimsResponse(BaseModel):
@@ -46,7 +61,7 @@ class ClaimsResponse(BaseModel):
 
 
 class EvidenceRequest(BaseModel):
-    claim: str
+    claim: str = Field(..., min_length=5, max_length=500)
 
 
 class EvidenceItem(BaseModel):
@@ -61,7 +76,7 @@ class EvidenceResponse(BaseModel):
 
 
 class VerifyRequest(BaseModel):
-    claim: str
+    claim: str = Field(..., min_length=5, max_length=500)
     evidence: list[dict]
 
 
@@ -80,10 +95,11 @@ def health_check():
 
 
 @app.post("/ingest", response_model=IngestResponse)
-def ingest_article(request: IngestRequest):
+@limiter.limit("5/minute")
+def ingest_article(request: IngestRequest, request_raw: Request):
     try:
         if request.url:
-            article = extract_article_from_url(request.url)
+            article = extract_article_from_url(str(request.url))
 
         elif request.text:
             article = {
@@ -107,7 +123,8 @@ def ingest_article(request: IngestRequest):
 
 
 @app.post("/claims", response_model=ClaimsResponse)
-def get_claims(request: ClaimsRequest):
+@limiter.limit("10/minute")
+def get_claims(request: ClaimsRequest, request_raw: Request):
     claims = extract_claims(request.content)
 
     if not claims:
@@ -120,7 +137,8 @@ def get_claims(request: ClaimsRequest):
 
 
 @app.post("/evidence", response_model=EvidenceResponse)
-def get_evidence(request: EvidenceRequest):
+@limiter.limit("10/minute")
+def get_evidence(request: EvidenceRequest, request_raw: Request):
     evidence = search_wikipedia(request.claim)
 
     if not evidence:
@@ -133,5 +151,6 @@ def get_evidence(request: EvidenceRequest):
 
 
 @app.post("/verify", response_model=VerifyResponse)
-def verify(request: VerifyRequest):
+@limiter.limit("10/minute")
+def verify(request: VerifyRequest, request_raw: Request):
     return verify_claim(request.claim, request.evidence)
